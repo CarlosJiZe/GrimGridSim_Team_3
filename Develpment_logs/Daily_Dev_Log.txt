@@ -29,3 +29,38 @@ Next steps
 - Implement Inverter class with clipping and failure simulation
 - Implement Load class with base + random spikes
 - Implement Grid class with import/export tracking
+
+Date: 2026-02-06  
+Team: Team 3  
+
+Member: Carlos Jimenez Zepeda
+
+Summary
+Today I completed three additional core components for the digital twin: Inverter, Load, and Grid. I also enhanced the Load class to include scheduled events for more realistic household consumption patterns. All components were tested and are working correctly.
+
+Work Completed
+1) Core classes implemented (src/)
+- Inverter.py: Solar inverter with power clipping (4 kW max) and random failure simulation (0.5% daily probability, 4-72 hour duration with state tracking).
+- Load.py: Household consumption model with four components: base load (0.5 kW constant), scheduled events (morning coffee, lunch, etc. with individual probabilities), peak hours (6-9 PM high consumption), and random noise (30% probability of small spikes).
+- Grid.py: Energy import/export with the utility grid, including cost tracking ($0.0075/kWh import, $0.009/kWh export), 20 kW export limit, and net balance calculation.
+
+2) Design decisions
+- Enhanced Load class beyond simple peak hours to include scheduled events at specific times (6 AM coffee, 12 PM lunch, etc.). This provides more realistic variability by combining base + scheduled + peak + random noise components.
+- Clarified export limit interpretation: 20 kW is an instantaneous power limit (not cumulative). With 1-hour time steps, this means max 20 kWh per hour with no daily/monthly accumulation.
+- Decided to keep Grid class simple (transactions only) and save energy management strategies for a separate EnergyManagementSystem class (next session).
+
+3) Testing and verification
+- I used AI assistance to help implement and test all three classes.
+- Inverter tests confirmed clipping works correctly (5 kW → 4 kW output) and failures occur at expected rate (~1 per 200 days).
+- Load tests showed scheduled events occurring at correct probabilities and realistic daily consumption patterns (avg 2.6 kW during peak hours, max 4.2 kW).
+- Grid tests validated import/export calculations, export limit enforcement, and net balance accuracy.
+
+Notes / Issues
+- Main learning was understanding the difference between scheduled events (time-specific, high probability) versus random noise (anytime, low probability) for realistic load modeling.
+- Had to clarify the export limit units (kW vs kWh) through careful analysis of the document wording and real-world context.
+- Test simulation showing negative net balance is realistic and expected when importing more energy overnight than exporting during peak solar hours.
+
+Next Steps
+- Implement EnergyManagementSystem class with three priority strategies (LOAD_PRIORITY, CHARGE_PRIORITY, PRODUCE_PRIORITY)
+- Create main Simulation class using SimPy for discrete-event simulation
+- Integrate all components into time-stepped simulation loop
