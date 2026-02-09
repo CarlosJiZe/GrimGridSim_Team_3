@@ -60,12 +60,6 @@ class Battery:
         """
         Charge battery with given energy, accounting for efficiency losses.
         
-        CORRECTED BEHAVIOR:
-        This method now returns the energy CONSUMED from the source,
-        not the energy stored. This ensures that efficiency losses
-        are properly accounted for and don't appear as "available energy"
-        in the EMS.
-        
         Physical process:
         1. Energy enters battery from source (e.g., solar panel)
         2. Some energy is lost as heat during charging (efficiency < 100%)

@@ -10,7 +10,7 @@
     "unit_capacity_kwh": 13.5,
     "count": 1,
     "efficiency": 0.9,
-    "min_soc": 5.0
+    "min_soc": 0.05
   },
   "solar": {
     "unit_peak_power_kw": 5.0,

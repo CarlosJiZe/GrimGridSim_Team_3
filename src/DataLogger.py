@@ -243,7 +243,7 @@ class DataLogger:
         answers.append(f"   -> {self.results['battery']['average_soc_percent']:.2f}%")
         answers.append("")
         
-        # Question 2 - FIX BUG #6: Use config values
+        # Question 2: Use config values
         answers.append("2. How often does the battery reach full charge or empty state?")
         
         # Get thresholds from config
@@ -299,11 +299,11 @@ class DataLogger:
         answers.append(f"      Per month: {export_per_month:.2f} kWh")
         answers.append("")
         
-        # Question 6 - FIX BUG #6: Calculate downtime from hourly_data
+        # Question 6 : Calculate downtime from hourly_data
         answers.append("6. How many times did the inverter fail, and what was the total downtime?")
         failures = self.results['reliability']['inverter_failures']
         
-        # CORRECTED: Calculate actual downtime from hourly data
+        #Calculate actual downtime from hourly data
         time_step_minutes = self.config['simulation']['time_step_minutes']
         time_step_hours = time_step_minutes / 60.0
         

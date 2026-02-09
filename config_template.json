@@ -4,105 +4,118 @@
   
   "simulation": {
     "duration_days": 30,
-    "_duration_days": "Number of days to simulate (30 = 1 month)",
+    "_duration_days_help": "Number of days to simulate (30 = 1 month, 90 = 3 months)",
     
     "time_step_minutes": 60,
-    "_time_step_minutes": "Simulation time step in minutes (60 = hourly)",
+    "_time_step_minutes_help": "Simulation time step in minutes (15, 30, or 60 recommended)",
     
     "start_date": "2024-06-01",
-    "_start_date": "Starting date (YYYY-MM-DD). Affects sun angle and daylight",
+    "_start_date_help": "Starting date (YYYY-MM-DD). Affects sun angle and daylight hours",
     
     "season": "summer",
-    "_season": "Season for cloud coverage: spring, summer, fall, winter",
+    "_season_help": "Season for cloud coverage patterns: spring, summer, fall, winter",
 
-    "random_seed": 519425893,
-    "_random_seed": "Integer for reproducible results. Set to null for random behavior every run"
+    "random_seed": null,
+    "_random_seed_help": "Integer for reproducible results. Set to null for random behavior each run. Example: 519425893"
   },
   
   "battery": {
     "unit_capacity_kwh": 13.5,
-    "_unit_capacity_kwh": "Capacity per battery unit (13.5 = Tesla Powerwall equivalent)",
+    "_unit_capacity_kwh_help": "Capacity per battery unit in kWh (13.5 = Tesla Powerwall)",
     
     "count": 1,
-    "_count": "Number of battery units (Total Capacity = unit_capacity * count)",
+    "_count_help": "Number of battery units. Total capacity = unit_capacity_kwh × count",
     
     "efficiency": 0.9,
-    "_efficiency": "Round-trip efficiency (0.9 = 90%, energy lost as heat)",
+    "_efficiency_help": "Round-trip efficiency as decimal (0.9 = 90%, 0.85 = 85%)",
     
-    "min_soc": 5.0,
-    "_min_soc": "Minimum state of charge in % (protection against deep discharge)"
+    "min_soc": 0.05,
+    "_min_soc_help": "Minimum state of charge as decimal (0.05 = 5%, 0.1 = 10%). Protects against deep discharge"
   },
   
   "solar": {
     "unit_peak_power_kw": 5.0,
-    "_unit_peak_power_kw": "Peak power per unit (5.0 kW = ~12 panels)",
+    "_unit_peak_power_kw_help": "Peak power per solar array in kW (5.0 kW ≈ 12-15 panels)",
     
     "count": 1,
-    "_count": "Number of solar arrays. TIP: Increase to 2 or 3 if you have high energy deficit"
+    "_count_help": "Number of solar arrays. Total peak = unit_peak_power_kw × count. Increase if system has high energy deficit"
   },
   
   "inverter": {
     "unit_max_output_kw": 4.0,
-    "_unit_max_output_kw": "Maximum output per inverter unit (clips excess solar)",
+    "_unit_max_output_kw_help": "Maximum output per inverter in kW (clips excess solar generation)",
     
     "count": 1,
-    "_count": "Number of inverter units",
+    "_count_help": "Number of inverter units. Total max output = unit_max_output_kw × count",
     
     "failure_rate": 0.005,
-    "_failure_rate": "Daily failure probability (0.005 = 0.5% per day)",
+    "_failure_rate_help": "Daily failure probability as decimal (0.005 = 0.5% per day, 0.01 = 1%)",
     
     "min_failure_duration_hours": 4,
-    "_min_failure_duration_hours": "Minimum hours inverter stays failed",
+    "_min_failure_duration_hours_help": "Minimum hours inverter stays failed when failure occurs",
     
     "max_failure_duration_hours": 72,
-    "_max_failure_duration_hours": "Maximum hours inverter stays failed"
+    "_max_failure_duration_hours_help": "Maximum hours inverter stays failed (72h = 3 days)"
   },
   
   "load": {
     "base_load_kw": 0.5,
-    "_base_load_kw": "Constant base load (refrigerator, router, standby)",
+    "_base_load_kw_help": "Constant base load in kW (refrigerator, router, standby devices)",
     
     "peak_hours_max_kw": 3.0,
-    "_peak_hours_max_kw": "Maximum added load during peak hours",
+    "_peak_hours_max_kw_help": "Maximum additional load during peak hours (cooking, entertainment)",
 
     "peak_hours_start": 18,
-    "_peak_hours_start": "Start of evening peak demand (hour 0-23)",
+    "_peak_hours_start_help": "Start of evening peak demand, hour 0-23 (18 = 6 PM)",
 
     "peak_hours_end": 21,
-    "_peak_hours_end": "End of evening peak demand (hour 0-23)"
+    "_peak_hours_end_help": "End of evening peak demand, hour 0-23 (21 = 9 PM)"
   },
   
   "grid": {
     "import_cost_per_kwh": 0.0075,
-    "_import_cost_per_kwh": "Cost to import energy from grid ($/kWh)",
+    "_import_cost_per_kwh_help": "Cost to import energy from grid in $/kWh (0.0075 = 0.75 cents)",
     
     "export_revenue_per_kwh": 0.009,
-    "_export_revenue_per_kwh": "Revenue from exporting energy to grid ($/kWh)",
+    "_export_revenue_per_kwh_help": "Revenue from exporting energy to grid in $/kWh (0.009 = 0.9 cents)",
     
     "export_limit_kw": 20.0,
-    "_export_limit_kw": "Max POWER flow (pipe size) allowed to grid. NOT a daily quantity limit"
+    "_export_limit_kw_help": "Maximum POWER (not energy) that can be exported to grid in kW. Acts as 'pipe size' limit"
   },
   
   "energy_management": {
     "strategy": "LOAD_PRIORITY",
-    "_strategy": "Options: LOAD_PRIORITY (House 1st), CHARGE_PRIORITY (Battery 1st), PRODUCE_PRIORITY (Grid 1st)"
+    "_strategy_help": "Options: LOAD_PRIORITY (house first), CHARGE_PRIORITY (battery first), PRODUCE_PRIORITY (grid export first)"
   },
   
-  "_examples": {
-    "_small_house_deficit": {
-      "battery": {"count": 1},
-      "solar": {"count": 1},
-      "inverter": {"count": 1}
-    },
-    "_balanced_house": {
-      "battery": {"count": 2},
-      "solar": {"count": 3},
-      "inverter": {"count": 2}
-    },
-    "_commercial": {
-      "battery": {"count": 4},
-      "solar": {"unit_peak_power_kw": 10.0, "count": 3},
-      "inverter": {"unit_max_output_kw": 10.0, "count": 2}
-    }
+  "_examples_comment": "========== EXAMPLE CONFIGURATIONS ==========",
+  
+  "_example_1_small_house": {
+    "_description": "Small house with deficit (like your current setup)",
+    "battery": {"count": 1, "unit_capacity_kwh": 13.5},
+    "solar": {"count": 1, "unit_peak_power_kw": 5.0},
+    "inverter": {"count": 1, "unit_max_output_kw": 4.0}
+  },
+  
+  "_example_2_balanced_house": {
+    "_description": "Balanced house with better self-sufficiency",
+    "battery": {"count": 2, "unit_capacity_kwh": 13.5},
+    "solar": {"count": 3, "unit_peak_power_kw": 5.0},
+    "inverter": {"count": 2, "unit_max_output_kw": 4.0}
+  },
+  
+  "_example_3_commercial": {
+    "_description": "Commercial or large residential",
+    "battery": {"count": 4, "unit_capacity_kwh": 13.5},
+    "solar": {"count": 3, "unit_peak_power_kw": 10.0},
+    "inverter": {"count": 2, "unit_max_output_kw": 10.0}
+  },
+  
+  "_tips": {
+    "_tip_1": "Use random_seed for reproducible results: copy the 'actual_seed_used' from a previous run",
+    "_tip_2": "Increase time_step_minutes to 15 for more detailed data (4x more rows in CSV)",
+    "_tip_3": "If self-sufficiency < 50%, consider adding more batteries or solar panels",
+    "_tip_4": "Battery min_soc should be 0.05-0.1 (5-10%) to protect battery lifespan",
+    "_tip_5": "Inverter max_output should be slightly less than solar peak to prevent clipping losses"
   }
 }

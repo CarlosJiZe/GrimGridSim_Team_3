@@ -182,7 +182,7 @@ class Simulation:
         total_steps = (self.duration_days * 24 * 60) // self.time_step_minutes
         time_step_hours = self.time_step_minutes / 60.0
         
-        # Calculate steps per day for day detection (FIX BUG #1)
+        # Calculate steps per day for day detection
         steps_per_day = (24 * 60) // self.time_step_minutes
         
         # Daily accumulators
@@ -249,7 +249,7 @@ class Simulation:
             })
             
             # ========== UPDATE DAILY TOTALS ==========
-            # FIX BUG #2: Curtailed is NOT counted in solar_generated
+            # Curtailed is NOT counted in solar_generated
             daily_solar += (
                 flows['solar_to_load'] + 
                 flows['solar_to_battery'] + 
@@ -265,12 +265,12 @@ class Simulation:
             yield self.env.timeout(self.time_step_minutes)
             current_step += 1
             
-            # ========== UPDATE INVERTER (EVERY TIMESTEP - FIX BUG #3) ==========
+            # ========== UPDATE INVERTER (EVERY TIMESTEP) ==========
             self.inverter.update(time_step_hours)
             
-            # ========== CHECK FOR NEW DAY (AFTER INCREMENT - FIX BUG #1) ==========
+            # ========== CHECK FOR NEW DAY (AFTER INCREMENT) ==========
             if current_step % steps_per_day == 0 and current_step > 0:
-                # FIX BUG #4: Correct self-sufficiency formula in daily summary
+                # Correct self-sufficiency formula in daily summary
                 daily_self_sufficiency = (
                     (1 - daily_grid_import / daily_load)
                 ) * 100 if daily_load > 0 else 0
@@ -378,7 +378,7 @@ class Simulation:
         avg_soc = sum(soc_values) / len(soc_values) if soc_values else 0
         final_soc = self.battery.get_soc()
         
-        # FIX BUG #6: Use config values instead of hardcoded thresholds
+        # Use config values instead of hardcoded thresholds
         min_soc_threshold = self.config['battery']['min_soc'] * 100
         max_soc_threshold = 100.0  # Always 100% for full
         
@@ -405,7 +405,7 @@ class Simulation:
         total_hours = len(self.hourly_data)
         unmet_load_percentage = (unmet_load_hours / total_hours * 100) if total_hours > 0 else 0
         
-        # FIX BUG #4: Correct self-sufficiency formula
+        # Correct self-sufficiency formula
         self_sufficiency = (
             (1 - total_grid_import / total_load)
         ) * 100 if total_load > 0 else 0
