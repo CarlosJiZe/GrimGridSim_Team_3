@@ -115,3 +115,35 @@ Immediate (next session):
 - Implement Simulation class using SimPy for discrete-event simulation
 - Integrate all 7 completed components (Battery, SolarPanel, CloudCoverage, Inverter, Load, Grid, EMS)
 - Create main simulation loop with hourly time steps
+
+Date: 2026-02-08  
+Team: Team 3  
+
+Member: Carlos Jimenez Zepeda  
+
+Summary
+Today marks a major milestone: I successfully integrated all individual components into the main simulation engine and created the execution scripts. I also implemented a robust configuration system using JSON files and a data logging system that automatically generates structured results. The Digital Twin is now fully operational.
+
+Work Completed
+1) Simulation orchestration (src/)
+- Simulation.py: Implemented the main class using SimPy. This orchestrator initializes all components (Battery, Grid, Solar, etc.) based on the configuration and runs the discrete-event loop step-by-step.
+- DataLogger.py: Created a dedicated class to handle data collection during the simulation and export it to CSV (hourly data) and JSON (summaries) within the results/ folder.
+
+2) Execution & analysis tools
+- main.py: The primary entry point. It loads the config.json, initializes the simulation, runs it, and triggers the data logger.
+- compare_strategies.py: A utility script that runs multiple simulations back-to-back while maintaining the same random seed. This allows for scientifically valid comparisons as required by the project rubric.
+- Configuration: Created config.json and config_template.json to allow parameter tuning without changing code.
+
+3) Testing and AI assistance
+- I used AI assistance to implement the JSON parameter parsing logic, ensuring robust error handling when reading configuration values.
+- The AI also helped design the DataLogger logic to dynamically create result folders with timestamps and save reports in the correct structure.
+- Generated tests for Simulation.py to verify that the time-steps progress correctly and that the final summary statistics match the accumulated hourly data.
+
+Notes / Issues
+- Initial runs showed high energy deficits. After analyzing the logs, I confirmed the code was correct; the issue was that the default "1 solar panel + 1 battery" setup is undersized for the simulated load. This validates the Digital Twin's purpose (identifying sizing issues before deployment).
+- Ensured that the random_seed in the JSON config correctly forces the same weather/load patterns, which is critical for the comparison script.
+
+Next Steps
+- Run the final set of simulations to answer the 15 project questions.
+- Compile the final report summarizing design choices and strategy comparisons.
+- Write personal reflections and clean up code for final submission.

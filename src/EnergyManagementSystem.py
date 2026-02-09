@@ -19,7 +19,7 @@ class EnergyManagementSystem:
         """
         self._strategy = strategy
 
-    def distribute_energy(self, solar_kw, load_kw, battery, grid):
+    def distribute_energy(self, solar_kw, load_kw, battery, grid, time_step_hours=1.0):
         """
         Distribute energy according to the selected strategy.
         
@@ -28,54 +28,28 @@ class EnergyManagementSystem:
             load_kw (float): House load demand in kW
             battery (Battery): Battery object
             grid (Grid): Grid object
+            time_step_hours (float): Duration of time step in hours
             
         Returns:
-            dict: Energy flows for logging {
-                'solar_to_load': ...,
-                'solar_to_battery': ...,
-                'solar_to_grid': ...,
-                'battery_to_load': ...,
-                'grid_to_load': ...,
-                'unmet_load': ...
-            }
+            dict: Energy flows for logging
         """
-        
         if self._strategy == 'LOAD_PRIORITY':
-            return self._load_priority(solar_kw, load_kw, battery, grid)
+            return self._load_priority(solar_kw, load_kw, battery, grid, time_step_hours)
         
         elif self._strategy == 'CHARGE_PRIORITY':
-            return self._charge_priority(solar_kw, load_kw, battery, grid)
+            return self._charge_priority(solar_kw, load_kw, battery, grid, time_step_hours)
         
         elif self._strategy == 'PRODUCE_PRIORITY':
-            return self._produce_priority(solar_kw, load_kw, battery, grid)
+            return self._produce_priority(solar_kw, load_kw, battery, grid, time_step_hours)
         
         else:
             raise ValueError(f"Unknown strategy: {self._strategy}")
 
 # ==============================LOAD_PRIORITY==========================================
 
-    def _load_priority(self, solar_kw, load_kw, battery, grid):
+    def _load_priority(self, solar_kw, load_kw, battery, grid, time_step_hours):
         """
         LOAD_PRIORITY: House first, battery second, grid export last.
-    
-        Priority when solar available:
-        1. Cover house load
-        2. Charge battery with excess
-        3. Export remaining to grid
-    
-        Priority when solar insufficient:
-        1. Use all available solar
-        2. Discharge battery to cover deficit
-        3. Import from grid if still needed
-    
-        Args:
-            solar_kw (float): Available solar power
-            load_kw (float): House demand
-            battery (Battery): Battery object
-            grid (Grid): Grid object
-        
-        Returns:
-            dict: Energy flows
         """
         # Initialize all energy flows
         solar_to_load = 0.0
@@ -83,52 +57,53 @@ class EnergyManagementSystem:
         solar_to_grid = 0.0
         battery_to_load = 0.0
         grid_to_load = 0.0
-        
-        # ========== CASE 1: Solar >= Load (excess available) ==========
-        if solar_kw >= load_kw:
-            # Step 1: Cover load with solar
-            solar_to_load = load_kw
-            excess = solar_kw - load_kw
-            
-            # Step 2: Charge battery with excess
-            if excess > 0:
-                charged = battery.charge(excess)
-                solar_to_battery = charged
-                excess -= charged
-            
-            # Step 3: Export remaining excess to grid
-            if excess > 0:
-                exported = grid.export_energy(excess)
-                solar_to_grid = exported
-        
-        # ========== CASE 2: Solar < Load (deficit) ==========
-        else:
-            # Step 1: Use all available solar
-            solar_to_load = solar_kw
-            deficit = load_kw - solar_kw
-            
-            # Step 2: Try to cover deficit with battery
-            if deficit > 0:
-                discharged = battery.discharge(deficit)
-                battery_to_load = discharged
-                deficit -= discharged
-            
-            # Step 3: Import from grid if still needed
-            if deficit > 0:
-                grid.import_energy(deficit)
-                grid_to_load = deficit
-
-        # Apply curtailment if enabled
         curtailed = 0.0
-        if battery.is_full() and solar_to_grid > 0:
-        # Battery is full and would export
-        # Instead, curtail (don't generate) that excess solar
-            curtailed = solar_to_grid
-            solar_to_grid = 0.0
         
-        # Unmet load = energy that internal system (solar+battery) couldn't provide
-        # This equals the energy we had to import from grid
-        unmet_load = grid_to_load
+        solar_remaining = solar_kw
+
+        # Step 1: Solar to House (Priority #1)
+        if solar_remaining > 0:
+            solar_to_load = min(solar_remaining, load_kw)
+            solar_remaining -= solar_to_load
+        
+        # Step 2: Solar to Battery (Priority #2)
+        # FIX: Check if battery is full BEFORE trying to charge
+        if solar_remaining > 0 and not battery.is_full():
+            offered_energy = solar_remaining * time_step_hours
+            charged_energy = battery.charge(offered_energy)
+            
+            # Convert back to Power (kW)
+            solar_to_battery = charged_energy / time_step_hours
+            solar_remaining -= solar_to_battery
+        
+        # Step 3: Solar to Grid (Priority #3)
+        if solar_remaining > 0:
+            # Export limit is handled inside grid.export_energy
+            exported_power = grid.export_energy(solar_remaining, time_step_hours)
+            solar_to_grid = exported_power
+            solar_remaining -= solar_to_grid
+            
+            # Any solar remaining here is effectively curtailed (Grid refused it)
+            curtailed = solar_remaining
+
+        # Step 4: Handle Deficit (Battery -> Grid)
+        # Calculate what part of the load was NOT covered by solar
+        deficit = load_kw - solar_to_load
+        
+        if deficit > 0:
+            # 4a. Try Battery first
+            requested_energy = deficit * time_step_hours
+            discharged_energy = battery.discharge(requested_energy)
+            battery_to_load = discharged_energy / time_step_hours
+            deficit -= battery_to_load
+            
+            # 4b. Try Grid second
+            if deficit > 0:
+                grid.import_energy(deficit, time_step_hours)
+                grid_to_load = deficit
+        
+        # Unmet load is whatever the grid couldn't provide (usually 0 unless grid fails)
+        unmet_load = 0.0 # Assuming infinite grid availability for import
         
         return {
             'solar_to_load': round(solar_to_load, 6),
@@ -142,88 +117,59 @@ class EnergyManagementSystem:
         
 # ==============================CHARGE_PRIORITY==========================================
 
-    def _charge_priority(self, solar_kw, load_kw, battery, grid):
+    def _charge_priority(self, solar_kw, load_kw, battery, grid, time_step_hours):
         """
         CHARGE_PRIORITY: Battery first, house second, grid export last.
-        
-        Priority when solar available:
-        1. Charge battery
-        2. Cover house load excess
-        3. Export remaining to grid
-    
-        Priority when solar insufficient:
-        1. Use all available solar
-        2. Discharge battery to cover deficit
-        3. Import from grid if still needed
-
-        Args:
-            solar_kw (float): Available solar power
-            load_kw (float): House demand
-            battery (Battery): Battery object
-            grid (Grid): Grid object
-            
-        Returns:
-            dict: Energy flows
-
         """    
-        
         # Initialize flows
         solar_to_load = 0.0
         solar_to_battery = 0.0
         solar_to_grid = 0.0
         battery_to_load = 0.0
         grid_to_load = 0.0
+        curtailed = 0.0
         
-        # ========== CASE 1: Solar >= Load ==========
-        if solar_kw >= load_kw:
-            # Step 1: Charge battery FIRST with all solar
-            charged = battery.charge(solar_kw)
-            solar_to_battery = charged
-            solar_remaining = solar_kw - charged
-            
-            # Step 2: Use remaining solar for house
-            if solar_remaining >= load_kw:
-                # Remaining solar covers load completely
-                solar_to_load = load_kw
-                excess = solar_remaining - load_kw
-                
-                # Step 3: Export excess
-                if excess > 0:
-                    exported = grid.export_energy(excess)
-                    solar_to_grid = exported
-            else:
-                # Remaining solar doesn't cover load
-                solar_to_load = solar_remaining
-                deficit = load_kw - solar_remaining
-                
-                # Import from grid to cover deficit
-                grid.import_energy(deficit)
-                grid_to_load = deficit
+        solar_remaining = solar_kw
         
-        # ========== CASE 2: Solar < Load ==========
-        else:
-            # Use all solar for load (don't charge when in deficit)
-            solar_to_load = solar_kw
-            deficit = load_kw - solar_kw
+        # Step 1: Solar to Battery (Priority #1)
+        # FIX: Check if battery is full BEFORE trying to charge
+        if solar_remaining > 0 and not battery.is_full():
+            offered_energy = solar_remaining * time_step_hours
+            charged_energy = battery.charge(offered_energy)
             
-            #Use battery as backup (same as LOAD_PRIORITY)
-            if deficit > 0:
-                discharged = battery.discharge(deficit)
-                battery_to_load = discharged
-                deficit -= discharged
+            solar_to_battery = charged_energy / time_step_hours
+            solar_remaining -= solar_to_battery
             
-            # Import from grid if still needed
+        # Step 2: Solar to House (Priority #2)
+        if solar_remaining > 0:
+            solar_to_load = min(solar_remaining, load_kw)
+            solar_remaining -= solar_to_load
+                
+        # Step 3: Solar to Grid (Priority #3)
+        if solar_remaining > 0:
+            exported_power = grid.export_energy(solar_remaining, time_step_hours)
+            solar_to_grid = exported_power
+            solar_remaining -= solar_to_grid
+            
+            # Remaining is curtailed
+            curtailed = solar_remaining
+
+        # Step 4: Handle Deficit (Battery -> Grid)
+        deficit = load_kw - solar_to_load
+        
+        if deficit > 0:
+            # 4a. Try Battery first (Standard deficit handling)
+            requested_energy = deficit * time_step_hours
+            discharged_energy = battery.discharge(requested_energy)
+            battery_to_load = discharged_energy / time_step_hours
+            deficit -= battery_to_load
+            
+            # 4b. Try Grid second
             if deficit > 0:
-                grid.import_energy(deficit)
+                grid.import_energy(deficit, time_step_hours)
                 grid_to_load = deficit
 
-        # Apply curtailment if enabled
-        curtailed = 0.0
-        if battery.is_full() and solar_to_grid > 0:
-                curtailed = solar_to_grid
-                solar_to_grid = 0.0
-                    
-        unmet_load = grid_to_load
+        unmet_load = 0.0
         
         return {
             'solar_to_load': round(solar_to_load, 6),
@@ -237,59 +183,59 @@ class EnergyManagementSystem:
 
 # ==============================PRODUCE_PRIORITY==========================================
 
-    def _produce_priority(self, solar_kw, load_kw, battery, grid):
+    def _produce_priority(self, solar_kw, load_kw, battery, grid, time_step_hours):
         """
         PRODUCE_PRIORITY: Grid export first, battery second, house last.
-        
-        Priority:
-        1. Export all solar to grid (up to 20 kW limit)
-        2. Charge battery with remaining solar (if any)
-        3. Power house with remaining solar (if any)
-        4. Cover house deficit from battery, then grid
         """
         solar_to_load = 0.0
         solar_to_battery = 0.0
         solar_to_grid = 0.0
         battery_to_load = 0.0
         grid_to_load = 0.0
+        curtailed = 0.0
         
-        # Step 1: Export ALL solar to grid (up to limit)
-        exported = grid.export_energy(solar_kw)
-        solar_to_grid = exported
-        solar_remaining = solar_kw - exported
+        solar_remaining = solar_kw
         
-        # Step 2: Charge battery with remaining solar (if any)
+        # Step 1: Export Solar to Grid (Priority #1)
         if solar_remaining > 0:
-            charged = battery.charge(solar_remaining)
-            solar_to_battery = charged
-            solar_remaining -= charged
+            # Try to export everything
+            exported_power = grid.export_energy(solar_remaining, time_step_hours)
+            solar_to_grid = exported_power
+            solar_remaining -= solar_to_grid # Only subtract what was successfully exported
         
-        # Step 3: Power house with remaining solar (if any)
+        # Step 2: Charge Battery (Priority #2 - with rejected solar)
+        # FIX: Check if battery is full BEFORE trying to charge
+        if solar_remaining > 0 and not battery.is_full():
+            offered_energy = solar_remaining * time_step_hours
+            charged_energy = battery.charge(offered_energy)
+            
+            solar_to_battery = charged_energy / time_step_hours
+            solar_remaining -= solar_to_battery
+        
+        # Step 3: Power House (Priority #3)
         if solar_remaining > 0:
             solar_to_load = min(solar_remaining, load_kw)
-            deficit = load_kw - solar_to_load
-        else:
-            # No solar left for house
-            deficit = load_kw
+            solar_remaining -= solar_to_load
         
-        # Step 4: Cover house deficit from battery
-        if deficit > 0:
-            discharged = battery.discharge(deficit)
-            battery_to_load = discharged
-            deficit -= discharged
+        # Calculate Curtailed (If Grid Full AND Battery Full AND Load Covered)
+        curtailed = solar_remaining
         
-        # Step 5: Import from grid if still needed
+        # Step 4: Handle Deficit (Battery -> Grid)
+        deficit = load_kw - solar_to_load
+        
         if deficit > 0:
-            grid.import_energy(deficit)
-            grid_to_load = deficit
+            # 4a. Try Battery first
+            requested_energy = deficit * time_step_hours
+            discharged_energy = battery.discharge(requested_energy)
+            battery_to_load = discharged_energy / time_step_hours
+            deficit -= battery_to_load
+            
+            # 4b. Import from grid
+            if deficit > 0:
+                grid.import_energy(deficit, time_step_hours)
+                grid_to_load = deficit
 
-        # Apply curtailment if enabled
-        curtailed = 0.0
-        if battery.is_full() and solar_to_grid > 0:
-            curtailed = solar_to_grid
-            solar_to_grid = 0.0
-        
-        unmet_load = grid_to_load
+        unmet_load = 0.0
         
         return {
             'solar_to_load': round(solar_to_load, 6),
