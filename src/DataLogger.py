@@ -189,17 +189,19 @@ class DataLogger:
     
     def save_answers(self):
         """
-        Generate answers to document questions (for report).
+        Save answers to all document questions.
         
         Returns:
             str: Path to saved file
         """
         filename = os.path.join(self.run_folder, "answers.txt")
         
-        with open(filename, 'w') as f:
-            f.write(self._generate_answers())
+        answers_text = self._generate_answers()
         
-        print(f"  Answers to questions saved")
+        with open(filename, 'w') as f:
+            f.write(answers_text)
+        
+        print(f"  Answers document saved")
         return filename
     
     def _generate_answers(self):
@@ -241,19 +243,31 @@ class DataLogger:
         answers.append(f"   -> {self.results['battery']['average_soc_percent']:.2f}%")
         answers.append("")
         
-        # Question 2
+        # Question 2 - FIX BUG #6: Use config values
         answers.append("2. How often does the battery reach full charge or empty state?")
-        full_count = sum(1 for h in self.results['data']['hourly_data'] if h['battery_soc'] >= 99.9)
-        empty_count = sum(1 for h in self.results['data']['hourly_data'] if h['battery_soc'] <= 5.1)
+        
+        # Get thresholds from config
+        min_soc_threshold = self.config['battery']['min_soc'] * 100
+        max_soc_threshold = 100.0
+        
+        # Count using config-based thresholds
+        full_count = sum(
+            1 for h in self.results['data']['hourly_data'] 
+            if h['battery_soc'] >= (max_soc_threshold - 0.1)
+        )
+        empty_count = sum(
+            1 for h in self.results['data']['hourly_data'] 
+            if h['battery_soc'] <= (min_soc_threshold + 0.1)
+        )
         total_hours = len(self.results['data']['hourly_data'])
         
         # Calculate per month
         full_per_month = (full_count / months) if months > 0 else full_count
         empty_per_month = (empty_count / months) if months > 0 else empty_count
         
-        answers.append(f"   -> Full (>=99.9%): {full_count} times total ({full_count/total_hours*100:.1f}%)")
+        answers.append(f"   -> Full (>={max_soc_threshold - 0.1:.1f}%): {full_count} times total ({full_count/total_hours*100:.1f}%)")
         answers.append(f"      Per month average: {full_per_month:.1f} times")
-        answers.append(f"   -> Empty (<=5.1%): {empty_count} times total ({empty_count/total_hours*100:.1f}%)")
+        answers.append(f"   -> Empty (<={min_soc_threshold + 0.1:.1f}%): {empty_count} times total ({empty_count/total_hours*100:.1f}%)")
         answers.append(f"      Per month average: {empty_per_month:.1f} times")
         answers.append("")
         
@@ -285,16 +299,21 @@ class DataLogger:
         answers.append(f"      Per month: {export_per_month:.2f} kWh")
         answers.append("")
         
-        # Question 6
+        # Question 6 - FIX BUG #6: Calculate downtime from hourly_data
         answers.append("6. How many times did the inverter fail, and what was the total downtime?")
         failures = self.results['reliability']['inverter_failures']
+        
+        # CORRECTED: Calculate actual downtime from hourly data
+        time_step_minutes = self.config['simulation']['time_step_minutes']
+        time_step_hours = time_step_minutes / 60.0
+        
         total_downtime = sum(
-            int(e['message'].split('remaining: ')[1].split('h')[0])
-            for e in self.results['data']['events_log']
-            if 'FAILURE' in e['message']
-        ) if self.results['data']['events_log'] else 0
+            time_step_hours for h in self.results['data']['hourly_data']
+            if not h['inverter_operational']
+        )
+        
         answers.append(f"   -> Failures: {failures} ({failures/months:.1f} per month)")
-        answers.append(f"   -> Total downtime: {total_downtime} hours ({total_downtime/months:.1f} hours per month)")
+        answers.append(f"   -> Total downtime: {total_downtime:.1f} hours ({total_downtime/months:.1f} hours per month)")
         answers.append("")
         
         # Question 7
@@ -316,6 +335,7 @@ class DataLogger:
         unmet_per_month = unmet_hours / months
         answers.append(f"   -> {unmet_hours} hours total ({unmet_pct:.2f}%)")
         answers.append(f"   -> Per month average: {unmet_per_month:.1f} hours")
+        answers.append(f"   -> Note: 'Unmet load' = energy not covered by solar+battery (imported from grid)")
         answers.append("")
         
         # Question 10
@@ -349,14 +369,14 @@ class DataLogger:
         answers.append(f"   -> Season: {self.results['summary']['season']}")
         answers.append(f"   -> Avg cloud coverage: {avg_cloud:.2f}")
         answers.append(f"   -> Solar generated: {solar_total:.2f} kWh total ({solar_per_month:.2f} kWh/month)")
-        answers.append("   -> Note: Run 'python3 compare_strategies.py' for complete comparison")
+        answers.append("   -> Note: Run simulations with different seasons for comparison")
         answers.append("")
         
         # Question 14
         answers.append("14. How does the system perform under different seasonal conditions?")
         answers.append(f"   -> Current season: {self.results['summary']['season']}")
         answers.append(f"   -> Solar generation: {solar_total:.2f} kWh total ({solar_per_month:.2f} kWh/month)")
-        answers.append("   -> Note: Run 'python3 compare_strategies.py' for complete comparison")
+        answers.append("   -> Note: Run simulations with different seasons for comparison")
         answers.append("")
         
         # Question 15
@@ -364,7 +384,7 @@ class DataLogger:
         if total_downtime > 0 and failures > 0:
             avg_duration = total_downtime / failures
             answers.append(f"   -> Average duration: {avg_duration:.1f} hours per failure")
-            answers.append(f"   -> Impact: {total_downtime} hours total without solar ({total_downtime/months:.1f} hours/month)")
+            answers.append(f"   -> Impact: {total_downtime:.1f} hours total without solar ({total_downtime/months:.1f} hours/month)")
         else:
             answers.append(f"   -> No failures occurred during this simulation")
         answers.append("")

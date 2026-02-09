@@ -180,6 +180,10 @@ class Simulation:
         """
         current_step = 0
         total_steps = (self.duration_days * 24 * 60) // self.time_step_minutes
+        time_step_hours = self.time_step_minutes / 60.0
+        
+        # Calculate steps per day for day detection (FIX BUG #1)
+        steps_per_day = (24 * 60) // self.time_step_minutes
         
         # Daily accumulators
         daily_solar = 0
@@ -190,7 +194,8 @@ class Simulation:
         current_day = 0
         
         while current_step < total_steps:
-            # Calculate current time
+            # ========== CALCULATE CURRENT TIME (BEFORE STEP) ==========
+            # This is used for solar generation and load calculation
             minutes_since_midnight = (current_step * self.time_step_minutes) % (24 * 60)
             hour_of_day = minutes_since_midnight / 60.0
             
@@ -199,7 +204,7 @@ class Simulation:
                 minutes=current_step * self.time_step_minutes
             )
             
-            # Generate solar power (affected by cloud coverage and inverter)
+            # ========== GENERATE SOLAR POWER ==========
             solar_available = self.solar_panel.generate(
                 hour_of_day,
                 self.current_cloud_coverage
@@ -211,11 +216,10 @@ class Simulation:
             else:
                 solar_generated = 0  # No solar during inverter failure
             
-            # Generate load demand
+            # ========== GENERATE LOAD DEMAND ==========
             load_demand = self.load.generate(hour=hour_of_day)
             
-            # Distribute energy using EMS
-            time_step_hours = self.time_step_minutes / 60.0
+            # ========== DISTRIBUTE ENERGY USING EMS ==========
             flows = self.ems.distribute_energy(
                 solar_kw=solar_generated,
                 load_kw=load_demand,
@@ -224,7 +228,7 @@ class Simulation:
                 time_step_hours=time_step_hours
             )
             
-            # Log hourly data
+            # ========== LOG HOURLY DATA ==========
             self.hourly_data.append({
                 'timestamp': current_date.strftime('%Y-%m-%d %H:%M:%S'),
                 'step': current_step,
@@ -244,19 +248,33 @@ class Simulation:
                 'inverter_operational': self.inverter.is_operational()
             })
             
-            # Update daily totals
-            daily_solar += flows['solar_to_load'] + flows['solar_to_battery'] + flows['solar_to_grid'] + flows['curtailed']
-            daily_load += load_demand * time_step_hours
-            daily_grid_import += flows['grid_to_load']
-            daily_grid_export += flows['solar_to_grid']
-            daily_curtailed += flows['curtailed']
+            # ========== UPDATE DAILY TOTALS ==========
+            # FIX BUG #2: Curtailed is NOT counted in solar_generated
+            daily_solar += (
+                flows['solar_to_load'] + 
+                flows['solar_to_battery'] + 
+                flows['solar_to_grid']
+            ) * time_step_hours
             
-            # Advance time
+            daily_load += load_demand * time_step_hours
+            daily_grid_import += flows['grid_to_load'] * time_step_hours
+            daily_grid_export += flows['solar_to_grid'] * time_step_hours
+            daily_curtailed += flows['curtailed'] * time_step_hours
+            
+            # ========== ADVANCE TIME ==========
             yield self.env.timeout(self.time_step_minutes)
             current_step += 1
             
-            # Check if we've moved to a new day
-            if current_step > 0 and minutes_since_midnight == 0:
+            # ========== UPDATE INVERTER (EVERY TIMESTEP - FIX BUG #3) ==========
+            self.inverter.update(time_step_hours)
+            
+            # ========== CHECK FOR NEW DAY (AFTER INCREMENT - FIX BUG #1) ==========
+            if current_step % steps_per_day == 0 and current_step > 0:
+                # FIX BUG #4: Correct self-sufficiency formula in daily summary
+                daily_self_sufficiency = (
+                    (1 - daily_grid_import / daily_load)
+                ) * 100 if daily_load > 0 else 0
+                
                 # Log daily summary
                 self._log_daily_summary(
                     current_day,
@@ -264,7 +282,8 @@ class Simulation:
                     daily_load,
                     daily_grid_import,
                     daily_grid_export,
-                    daily_curtailed
+                    daily_curtailed,
+                    daily_self_sufficiency
                 )
                 
                 # Reset daily accumulators
@@ -279,11 +298,8 @@ class Simulation:
                 if current_day % 5 == 0:
                     print(f"  Day {current_day}/{self.duration_days} completed ({current_day/self.duration_days*100:.1f}%)")
                 
-                # Check for inverter failure (once per day)
+                # Check for inverter failure (once per day at day start)
                 self.inverter.check_failure()
-                
-                # Update inverter status (24 hours passed)
-                self.inverter.update(hours_passed=24)
                 
                 # Log inverter failure events
                 if self.inverter._is_failing:
@@ -299,17 +315,34 @@ class Simulation:
         
         # Log final day if incomplete
         if daily_solar > 0 or daily_load > 0:
+            daily_self_sufficiency = (
+                (1 - daily_grid_import / daily_load)
+            ) * 100 if daily_load > 0 else 0
+            
             self._log_daily_summary(
                 current_day,
                 daily_solar,
                 daily_load,
                 daily_grid_import,
                 daily_grid_export,
-                daily_curtailed
+                daily_curtailed,
+                daily_self_sufficiency
             )
     
-    def _log_daily_summary(self, day, solar, load, grid_import, grid_export, curtailed):
-        """Log daily summary statistics."""
+    def _log_daily_summary(self, day, solar, load, grid_import, grid_export, 
+                          curtailed, self_sufficiency):
+        """
+        Log daily summary statistics.
+        
+        Args:
+            day (int): Day number
+            solar (float): Solar energy generated (kWh)
+            load (float): Load consumed (kWh)
+            grid_import (float): Energy imported from grid (kWh)
+            grid_export (float): Energy exported to grid (kWh)
+            curtailed (float): Energy curtailed (kWh)
+            self_sufficiency (float): Self-sufficiency percentage
+        """
         self.daily_summaries.append({
             'day': day + 1,
             'solar_generated_kwh': solar,
@@ -318,7 +351,7 @@ class Simulation:
             'grid_exported_kwh': grid_export,
             'curtailed_kwh': curtailed,
             'battery_soc_end': self.battery.get_soc(),
-            'self_sufficiency_percent': ((solar - grid_import) / load * 100) if load > 0 else 0
+            'self_sufficiency_percent': self_sufficiency
         })
     
     def _compile_results(self):
@@ -345,14 +378,37 @@ class Simulation:
         avg_soc = sum(soc_values) / len(soc_values) if soc_values else 0
         final_soc = self.battery.get_soc()
         
+        # FIX BUG #6: Use config values instead of hardcoded thresholds
+        min_soc_threshold = self.config['battery']['min_soc'] * 100
+        max_soc_threshold = 100.0  # Always 100% for full
+        
+        battery_full_count = sum(
+            1 for h in self.hourly_data 
+            if h['battery_soc'] >= (max_soc_threshold - 0.1)
+        )
+        
+        battery_empty_count = sum(
+            1 for h in self.hourly_data 
+            if h['battery_soc'] <= (min_soc_threshold + 0.1)
+        )
+        
         # Calculate reliability metrics
         inverter_failures = len([e for e in self.events_log if 'FAILURE' in e['message']])
+        
+        # Calculate inverter downtime from hourly data
+        downtime_hours = sum(
+            1 for h in self.hourly_data 
+            if not h['inverter_operational']
+        ) * (self.time_step_minutes / 60.0)
+        
         unmet_load_hours = sum(1 for h in self.hourly_data if h['unmet_load'] > 0)
         total_hours = len(self.hourly_data)
         unmet_load_percentage = (unmet_load_hours / total_hours * 100) if total_hours > 0 else 0
         
-        # Self-sufficiency
-        self_sufficiency = ((total_solar - total_grid_import) / total_load * 100) if total_load > 0 else 0
+        # FIX BUG #4: Correct self-sufficiency formula
+        self_sufficiency = (
+            (1 - total_grid_import / total_load)
+        ) * 100 if total_load > 0 else 0
         
         return {
             'summary': {
@@ -375,10 +431,13 @@ class Simulation:
                 'average_soc_percent': avg_soc,
                 'final_soc_percent': final_soc,
                 'capacity_kwh': self.battery._capacity_kwh,
-                'count': self.battery_count
+                'count': self.battery_count,
+                'times_full': battery_full_count,
+                'times_empty': battery_empty_count
             },
             'reliability': {
                 'inverter_failures': inverter_failures,
+                'inverter_downtime_hours': downtime_hours,
                 'total_unmet_load_kwh': total_grid_import,
                 'hours_with_unmet_load': unmet_load_hours,
                 'unmet_load_percentage': unmet_load_percentage
