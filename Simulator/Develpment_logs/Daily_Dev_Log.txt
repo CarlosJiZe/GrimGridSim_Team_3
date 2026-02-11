@@ -148,6 +148,29 @@ Next Steps
 - Compile the final report summarizing design choices and strategy comparisons.
 - Write personal reflections and clean up code for final submission.
 
+
+Date: 2026-02-8
+Team: Team 3  
+
+Member: Martín García
+
+Summary: 
+Today was the testing of the code and searching for problems with some configs or parameters.
+
+Work Completed:
+
+1) Check that the code has all the escenarios posible:
+-Try absurds values like 0 days, 1000 hours, 0.00001 kW
+-See if the code has all the detection if this problems and gives a warning before crash the code
+
+2)Review and testing:
+-See all the files and make sure all the thing are working as intended
+-Try new cases or values in the config
+
+3)Add to .gitignore the results:
+-Make the results to stay in the computer and not pushed in the GitHub
+
+
 Date: 2026-02-09  
 Team: Team 3  
 
@@ -191,3 +214,57 @@ Next Steps
 - Run final verification with multiple random seeds
 - Write personal reflection about debugging process
 - Prepare final report with corrected metrics for submission
+
+
+
+Date: 2026-02-10
+Team: Team 3
+
+Member: Martin García
+
+Summary:
+See the canges and rerun some test and cases after all the corrections
+
+Work completed:
+
+1)Try to break the code:
+-Again use absurd values to check the output of the code
+-Use variables that are not allowed in the config
+
+2)Rerun some previous conifs:
+-Use the configs i used in previous days
+-Check if the data changed and what changed
+-In case the data doesnt change see if its correct
+
+3)Start with the README file:
+-Start dividing all the sections in the code
+-Add text of how does the code working
+
+Date: 2026-02-11
+Team: Team 3
+
+Member: Martin García
+
+Summary: 
+Finish the README File
+
+Work completed:
+
+1)Finish writing the README file:
+- Add:
+  * [Features]
+  * [Quick Start]
+  * [Installation]
+  * [Configuration]
+  * [Usage](#-usage)
+  * [Project Structure]
+  * [Output Files]
+  * [Advanced Usage]
+  * [Troubleshooting]
+  * [Future Phases]
+- Organize all the info 
+-Add the index of all the README
+-Check the grammar of the file
+-See if the instructions are cristal clear
+-Add the Troubleshooting that is commond and how to fix it
+-Add the LICENSE already in the project to it
