@@ -96,7 +96,7 @@ python3 main.py
 
 ### Configuration Files
 
-The simulation uses `config.json` in the `src` file for all settings. A template with detailed explanations is provided in `config_template.json`.
+The simulation uses `config.json` in the `simulator` file for all settings. A template with detailed explanations is provided in `config_template.json`.
 
 ### Quick Configuration
 
