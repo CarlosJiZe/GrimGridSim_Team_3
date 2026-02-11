@@ -623,9 +623,7 @@ This is an academic project, but suggestions are welcome!
 
 ## 📄 License
 
-Academic project for Simulation & Visualization  
-Universidad Panamericana, Guadalajara  
-Team 3
+You can read it in the LICENSE file
 
 ---
 
